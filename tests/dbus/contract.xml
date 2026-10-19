@@ -1,0 +1,77 @@
+<node>
+  <object path="/org/desktopspec/ApplicationManager1">
+    <interface name="org.desktopspec.ApplicationManager1">
+      <method name="Identify">
+        <arg name="pidfd" type="h" direction="in"/>
+        <arg name="id" type="s" direction="out"/>
+        <arg name="instance" type="o" direction="out"/>
+        <arg name="application_instance_info" type="a{sa{sv}}" direction="out"/>
+      </method>
+      <method name="ReloadApplications"/>
+      <method name="addUserApplication">
+        <arg name="desktop_file" type="a{sv}" direction="in"/>
+        <arg name="name" type="s" direction="in"/>
+        <arg name="app_id" type="s" direction="out"/>
+      </method>
+      <method name="deleteUserApplication">
+        <arg name="app_id" type="s" direction="in"/>
+      </method>
+      <method name="executeCommand">
+        <arg name="program" type="s" direction="in"/>
+        <arg name="arguments" type="as" direction="in"/>
+        <arg name="type" type="s" direction="in"/>
+        <arg name="runId" type="s" direction="in"/>
+        <arg name="envVars" type="a{ss}" direction="in"/>
+        <arg name="workdir" type="s" direction="in"/>
+        <arg name="instancePath" type="o" direction="out"/>
+      </method>
+      <property name="List" type="ao" access="read"/>
+    </interface>
+    <interface name="org.desktopspec.DBus.ObjectManager">
+      <method name="GetManagedObjects">
+        <arg name="objpath_interfaces_and_properties" type="a{oa{sa{sv}}}" direction="out"/>
+      </method>
+      <signal name="InterfacesAdded">
+        <arg name="object_path" type="o"/>
+        <arg name="interfaces_and_properties" type="a{sa{sv}}"/>
+      </signal>
+      <signal name="InterfacesRemoved">
+        <arg name="object_path" type="o"/>
+        <arg name="interfaces" type="as"/>
+      </signal>
+    </interface>
+  </object>
+  <object path="/org/desktopspec/ApplicationManager1/JobManager1">
+    <interface name="org.desktopspec.JobManager1">
+      <signal name="JobNew">
+        <arg name="job" type="o"/>
+        <arg name="source" type="o"/>
+      </signal>
+      <signal name="JobRemoved">
+        <arg name="job" type="o"/>
+        <arg name="status" type="s"/>
+        <arg name="result" type="av"/>
+      </signal>
+    </interface>
+  </object>
+  <object path="/org/desktopspec/ApplicationManager1/MimeManager1">
+    <interface name="org.desktopspec.MimeManager1">
+      <method name="listApplications">
+        <arg name="mimeType" type="s" direction="in"/>
+        <arg name="applications_and_properties" type="a{oa{sa{sv}}}" direction="out"/>
+      </method>
+      <method name="queryDefaultApplication">
+        <arg name="content" type="s" direction="in"/>
+        <arg name="mimeType" type="s" direction="out"/>
+        <arg name="application" type="o" direction="out"/>
+      </method>
+      <method name="setDefaultApplication">
+        <arg name="defaultApps" type="a{ss}" direction="in"/>
+      </method>
+      <method name="unsetDefaultApplication">
+        <arg name="mimeTypes" type="as" direction="in"/>
+      </method>
+      <signal name="MimeInfoReloaded"/>
+    </interface>
+  </object>
+</node>

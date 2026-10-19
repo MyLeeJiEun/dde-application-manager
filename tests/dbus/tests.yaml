@@ -1,0 +1,67 @@
+# dde-application-manager 用例。
+# 离屏 CI:应用实例的创建/启动依赖 systemd 单元(systemd_dde mock 提供骨架),
+# Identify 依赖 pidfd。用例以只读接口与缓存刷新为主,不真正启动应用。
+apiVersion: v1
+cases:
+  # ObjectManager 面:AM 注册了 org.desktopspec.DBus.ObjectManager,核对返回签名。
+  - name: object-manager-get-managed-objects
+    call:
+      object: /org/desktopspec/ApplicationManager1
+      interface: org.desktopspec.DBus.ObjectManager
+      method: GetManagedObjects
+    expect: { signature: "a{oa{sa{sv}}}" }
+
+  # 应用列表(只读属性)。空环境下应为合法空数组,不断言具体条目。
+  - name: list-apps-readable
+    get-prop:
+      object: /org/desktopspec/ApplicationManager1
+      property: List
+    expect: { signature: "ao" }
+
+  # 缓存重扫:无入参,必须成功返回。
+  - name: reload-applications-ok
+    call:
+      object: /org/desktopspec/ApplicationManager1
+      interface: org.desktopspec.ApplicationManager1
+      method: ReloadApplications
+    expect: { error: null }
+
+  # 错误路径:fd 无效时 Identify 必须报错,不能崩溃(-1 按 h 类型传)。
+  - name: identify-rejects-bad-fd
+    call:
+      object: /org/desktopspec/ApplicationManager1
+      interface: org.desktopspec.ApplicationManager1
+      method: Identify
+      args: [-1]
+    expect: { error: "*" }
+
+  # 错误路径:未声明的方法必须由 D-Bus 以 UnknownMethod 拒绝。
+  - name: unknown-method-rejected
+    call:
+      object: /org/desktopspec/ApplicationManager1
+      interface: org.desktopspec.ApplicationManager1
+      method: NoSuchMethod
+    expect: { error: org.freedesktop.DBus.Error.UnknownMethod }
+
+  # MimeManager1(只读面):按 mime 类型查默认应用。沙箱里没有关联应用,
+  # 只断言返回签名,不断言具体值。
+  - name: mime-query-default-application
+    call:
+      object: /org/desktopspec/ApplicationManager1/MimeManager1
+      interface: org.desktopspec.MimeManager1
+      method: queryDefaultApplication
+      args: ["text/plain"]
+    expect: { signature: "so" }
+
+  # MimeManager1(只读面):列出能处理该 mime 类型的应用。
+  - name: mime-list-applications
+    call:
+      object: /org/desktopspec/ApplicationManager1/MimeManager1
+      interface: org.desktopspec.MimeManager1
+      method: listApplications
+      args: ["text/plain"]
+    expect: { signature: "a{oa{sa{sv}}}" }
+
+  # 契约:三方一致性(源码声明 XML / contract.xml / 运行时快照)。
+  - name: contract
+    check-contract: {}

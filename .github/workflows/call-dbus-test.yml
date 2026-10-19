@@ -1,0 +1,70 @@
+name: DBus interface test
+
+# dde-application-manager 的 DBus 接口测试(process 形态):
+# 对刚构建出的 dde-application-manager 在私有总线上跑接口面验证
+# (ApplicationManager1 主接口 + MimeManager1),并做契约比对。
+#
+# 构建依赖注意:
+# - treeland-protocols:src/dbus 编译期要 treeland-prelaunch-splash-v2.xml。
+#   crimson 源的 0.5.10 含该文件;本机若装了更高版本(0.7+)反而没有,
+#   需从 0.5.10 deb 提取补到 /usr/share/treeland-protocols/。
+# - libdtk6common-dev 不在 crimson 源(包名不同),装 libdtk6core-dev
+#   经依赖链带入。
+# - libdtk6core-bin:libdtk6core-dev 的 Dtk6Tools cmake 配置引用
+#   /usr/libexec/dtk6/DCore/bin/qdbusxml2cpp-fix,缺该包 configure 直接失败。
+# - 运行时依赖 systemd mock:框架 needs: mock systemd 提供
+#   (上游 dbusmock systemd 模板缺 AM 需要的方法,框架已补)。
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  dbus-interface:
+    runs-on: ubuntu-latest
+    container: linuxdeepin/deepin:crimson
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装构建依赖
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates git make cmake pkg-config build-essential g++ \
+            qt6-base-dev qt6-base-private-dev qt6-tools-dev \
+            qt6-wayland-dev qt6-wayland-private-dev \
+            libsystemd-dev libdtk6core-dev libdtk6core-bin libdtk6gui-dev \
+            libgtest-dev \
+            treeland-protocols libxkbcommon-dev dde-api-dev \
+            python3-pip python3-setuptools python3-wheel python3-yaml \
+            python3-dbus python3-gi python3-dbusmock \
+            gdb
+
+      - name: 构建被测物
+        run: |
+          cmake -S . -B build-am -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-am -j"$(nproc)"
+          test -f build-am/apps/dde-application-manager/src/dde-application-manager
+
+      - name: 安装 dbus-testing
+        env:
+          DBUS_TESTING_REPO: https://github.com/MyLeeJiEun/deepin-dbus-testing
+        run: |
+          git clone --depth 1 "${DBUS_TESTING_REPO}" /tmp/dbus-testing-src
+          pip install --break-system-packages --no-build-isolation --no-deps \
+            /tmp/dbus-testing-src
+          dbus-testing --version
+
+      - name: DBus 接口测试
+        run: |
+          dbus-testing run tests/dbus --build-dir build-am --report artifacts/
+
+      - name: 上传报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dbus-test-report
+          path: artifacts/
+          if-no-files-found: warn

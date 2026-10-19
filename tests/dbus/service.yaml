@@ -1,0 +1,65 @@
+# dde-application-manager 的 DBus 接口测试(process 形态)。
+# Debug 构建可用 DDE_AM_USE_DEBUG_DBUS_NAME 切到
+# org.desktopspec.debug.ApplicationManager1(避免与系统实例冲突),
+# Release 构建用正式名。此处用 Release 构建正式名。
+# 依赖:systemd(应用实例经 systemd 单元管理),离屏 CI 用框架 systemd_dde mock
+# ——上游 dbusmock 的 systemd 模板缺 Subscribe/ListUnitsByPatterns/StartTransientUnit
+# 与 Manager.Environment,AM 在 initService 依赖失败处会直接 std::terminate;
+# 应用清单在沙箱里固定为空(见下方 sandbox.env)。
+apiVersion: v1
+process: dde-application-manager
+mode: isolate
+kind: process
+tier: T3
+
+services:
+  - org.desktopspec.ApplicationManager1
+
+binary:
+  search:
+    - ${BUILD_DIR}/apps/dde-application-manager/src/dde-application-manager
+    - ${BUILD_DIR}/apps/dde-application-manager/dde-application-manager
+    - /usr/bin/dde-application-manager
+
+args: []
+
+needs:
+  - mock: systemd_dde
+    bus: session
+  # applicationmanager1service.cpp:332 向 system 总线订阅
+  # ApplicationUpdateNotifier1 信号,失败即 qFatal。CI 无系统总线,
+  # 需要框架拉起私有 system 总线(用 dconfig 替身占位,任意 system mock 都行)
+  - mock: dconfig
+    bus: system
+
+sandbox:
+  home: tmp
+  env:
+    QT_QPA_PLATFORM: offscreen
+    LANG: C.UTF-8
+    LANGUAGE: en_US
+    # 不扫宿主应用目录:否则 AM 会按机器上已装的应用/自启项长出上百个
+    # Application 子对象,contract.xml 随开发机漂移。XDG_DATA_DIRS 扫
+    # */applications,XDG_CONFIG_DIRS 扫 */autostart;两者指向不存在的目录 →
+    # 应用清单固定为空(XDG_DATA_HOME/XDG_CONFIG_HOME 已由沙箱指到空目录)。
+    XDG_DATA_DIRS: /nonexistent-dbus-testing-data
+    XDG_CONFIG_DIRS: /nonexistent-dbus-testing-config
+
+ready:
+  name-owner:
+    - org.desktopspec.ApplicationManager1
+  timeout: 20s
+
+ignore:
+  interfaces:
+    - "org.freedesktop.DBus.*"
+    # 应用/任务实例的接口:只在真的拉起应用或任务时才导出,本基线(离屏、无实例)
+    # 里没有对应对象。从基线两侧(源码声明 XML 与运行时快照)一起剔除,否则静态
+    # 门禁会把"源码声明了但运行时没有"误报成漂移。
+    # 已知缺口:contract.xml 因此不锁定这三个接口的运行时签名(源码声明仍在
+    # api/dbus/*.xml 里);要覆盖需在用例中真的创建应用/任务实例。
+    - "org.desktopspec.ApplicationManager1.Application"
+    - "org.desktopspec.ApplicationManager1.Instance"
+    - "org.desktopspec.JobManager1.Job"
+
+teardown: kill
